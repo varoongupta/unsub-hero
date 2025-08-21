@@ -1,5 +1,5 @@
-// unsub-web/postcss.config.mjs
-export default {
+// postcss.config.js
+module.exports = {
   plugins: {
     "@tailwindcss/postcss": {}
   }
