@@ -6,16 +6,24 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { userId } = await auth();
-  if (!userId) return NextResponse.redirect(new URL("/sign-in", process.env.APP_URL || "http://localhost:3000"));
+  if (!userId) {
+    const base = process.env.APP_URL || "http://localhost:3000";
+    return NextResponse.redirect(new URL("/sign-in", base));
+  }
   const oauth2 = getOAuthClient();
+  const redirectUri =
+    process.env.GOOGLE_REDIRECT_URI ??
+    `${process.env.APP_URL}/api/gmail/callback`;
+
   const url = oauth2.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
     scope: GMAIL_SCOPES,
     include_granted_scopes: true,
+    redirect_uri: redirectUri, // ← ensure present
     state: encodeURIComponent(JSON.stringify({ redirect: "/dashboard" })),
   });
+
   return NextResponse.redirect(url);
 }
-
 
