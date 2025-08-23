@@ -7,6 +7,7 @@ import HistoryClient from "./HistoryClient";
 import SettingsClient from "./SettingsClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { SendersProvider } from "@/contexts/SendersContext";
 
 export default async function DashboardPage(props: { searchParams?: Promise<Record<string, string | string[]>> }) {
   const { userId } = await auth();
@@ -63,11 +64,13 @@ export default async function DashboardPage(props: { searchParams?: Promise<Reco
   }
 
   return (
-    <AppShell currentTab={tab}>
-      {tab === "senders" && <SendersClient />}
-      {tab === "history" && <HistoryClient />}
-      {tab === "settings" && <SettingsClient />}
-    </AppShell>
+    <SendersProvider>
+      <AppShell currentTab={tab}>
+        {tab === "senders" && <SendersClient />}
+        {tab === "history" && <HistoryClient />}
+        {tab === "settings" && <SettingsClient />}
+      </AppShell>
+    </SendersProvider>
   );
 }
 

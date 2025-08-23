@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { Search, Trash2, Mail, ExternalLink, MoreHorizontal, Check } from "lucide-react";
+import { useSenders } from "@/contexts/SendersContext";
 
 type Sender = {
   id: string;
@@ -25,32 +26,21 @@ type Sender = {
 };
 
 export default function SendersClient() {
+  const { allSenders, total, loading, loadSenders } = useSenders();
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
-  const [loading, setLoading] = useState(true); // Start with loading true
-  const [allSenders, setAllSenders] = useState<Sender[]>([]); // All senders from API
   const [senders, setSenders] = useState<Sender[]>([]); // Filtered senders for display
-  const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [doing, setDoing] = useState<"unsub" | "trash" | "both" | null>(null);
   const [showProgress, setShowProgress] = useState(false);
   const [progress, setProgress] = useState(0);
   const [provider, setProvider] = useState("all");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/senders/list?page=${page}&pageSize=${pageSize}`);
-      const data = await res.json();
-      setAllSenders(data.senders ?? []);
-      setTotal(data.total ?? 0);
-    } catch {
-      toast.error("Failed to load senders");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize]);
+  // Load senders on component mount
+  useEffect(() => {
+    loadSenders();
+  }, [loadSenders]);
 
   // Filter senders locally based on search query and provider
   useEffect(() => {
@@ -81,10 +71,6 @@ export default function SendersClient() {
     return senders.slice(startIndex, endIndex);
   }, [senders, page, pageSize]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
   const selectedSenders = useMemo(() => senders.filter((s) => selected[s.fromEmail]), [senders, selected]);
   const hasSelection = selectedSenders.length > 0;
 
@@ -113,7 +99,7 @@ export default function SendersClient() {
       if (res.ok) {
         toast.success(`Unsubscribed from ${items.length} sender(s)`);
         setSelected({});
-        load();
+        loadSenders();
       } else {
         toast.error("Failed to unsubscribe. Please try again.");
       }
@@ -146,7 +132,7 @@ export default function SendersClient() {
         const totalDeleted = Object.values(data.deletedCountBySender || {}).reduce((sum: number, count: unknown) => sum + (typeof count === 'number' ? count : 0), 0);
         toast.success(`Moved ${totalDeleted} messages to Trash`);
         setSelected({});
-        load();
+        loadSenders();
       } else {
         toast.error("Failed to move messages to trash. Please try again.");
       }
@@ -202,14 +188,14 @@ export default function SendersClient() {
           const totalDeleted = Object.values(data.deletedCountBySender || {}).reduce((sum: number, count: unknown) => sum + (typeof count === 'number' ? count : 0), 0);
           toast.success(`Unsubscribed and moved ${totalDeleted} messages to Trash`);
           setSelected({});
-          load();
+          loadSenders();
         } else {
           toast.error("Failed to move messages to trash. Please try again.");
         }
       } else {
         toast.success(`Unsubscribed from ${items.length} sender(s)`);
         setSelected({});
-        load();
+        loadSenders();
       }
     } catch (error) {
       toast.error("Error: " + error);
@@ -261,7 +247,7 @@ export default function SendersClient() {
 
       const actionText = action === "both" ? "Unsubscribed and deleted" : action === "unsubscribe" ? "Unsubscribed from" : "Deleted messages from";
       toast.success(`${actionText} ${sender.from || sender.fromEmail}`);
-      load();
+      loadSenders();
     } catch {
       toast.error("Error performing action");
     }
@@ -300,7 +286,7 @@ export default function SendersClient() {
             <SelectItem value="outlook">Outlook</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={load} disabled={loading}>
+        <Button variant="outline" onClick={loadSenders} disabled={loading}>
           Refresh
         </Button>
       </div>
@@ -384,7 +370,7 @@ export default function SendersClient() {
               <p className="text-sm text-muted-foreground mb-4">
                 No email senders found in your inbox. Try refreshing or check back later.
               </p>
-              <Button variant="outline" onClick={load} disabled={loading}>
+              <Button variant="outline" onClick={loadSenders} disabled={loading}>
                 Refresh
               </Button>
             </div>
