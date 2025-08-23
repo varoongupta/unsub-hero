@@ -16,7 +16,6 @@ function getRedirectUri(): string {
   const explicit = process.env.GOOGLE_REDIRECT_URI?.trim();
   const fallback =
     process.env.APP_URL && `${process.env.APP_URL.replace(/\/$/, "")}/api/gmail/callback`;
-
   const uri = explicit || fallback;
   if (!uri) {
     throw new Error(

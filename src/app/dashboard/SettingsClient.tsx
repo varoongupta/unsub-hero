@@ -1,12 +1,63 @@
 "use client";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Mail, Trash2, Shield, ExternalLink, AlertTriangle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function SettingsClient() {
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [isGmailConnected, setIsGmailConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+
+  // Check Gmail connection status on component mount
+  useEffect(() => {
+    const checkGmailStatus = async () => {
+      try {
+        const response = await fetch("/api/gmail/status");
+        if (response.ok) {
+          const data = await response.json();
+          setIsGmailConnected(data.connected);
+        }
+      } catch (error) {
+        console.error("Error checking Gmail status:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkGmailStatus();
+  }, []);
+
+  const handleDisconnectGmail = async () => {
+    setIsDisconnecting(true);
+    try {
+      const response = await fetch("/api/gmail/disconnect", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        setIsGmailConnected(false);
+        toast.success("Gmail has been disconnected successfully");
+      } else {
+        toast.error("Failed to disconnect Gmail");
+        console.error("Failed to disconnect Gmail");
+      }
+    } catch (error) {
+      toast.error("Error disconnecting Gmail");
+      console.error("Error disconnecting Gmail:", error);
+    } finally {
+      setIsDisconnecting(false);
+    }
+  };
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -33,38 +84,61 @@ export default function SettingsClient() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 border rounded-lg">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                <Mail className="h-5 w-5 text-red-600" />
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                isGmailConnected ? "bg-red-100" : "bg-gray-100"
+              }`}>
+                <Mail className={`h-5 w-5 ${
+                  isGmailConnected ? "text-red-600" : "text-gray-400"
+                }`} />
               </div>
               <div>
                 <div className="font-medium">Gmail</div>
-                <div className="text-sm text-muted-foreground">Connected</div>
+                <div className="text-sm text-muted-foreground">
+                  {isLoading ? "Loading..." : isGmailConnected ? "Connected" : "Not connected"}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="secondary">Connected</Badge>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    Disconnect
+              {isLoading ? (
+                <div className="text-sm text-muted-foreground">Loading...</div>
+              ) : isGmailConnected ? (
+                <>
+                  <Badge variant="secondary">Connected</Badge>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        Disconnect
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Disconnect Gmail?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will remove your Gmail connection and stop syncing your email data. 
+                          You can reconnect at any time.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={handleDisconnectGmail}
+                          disabled={isDisconnecting}
+                        >
+                          {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              ) : (
+                <>
+                  <Badge variant="outline">Disconnected</Badge>
+                  <Button size="sm" asChild>
+                    <a href="/api/gmail/start">Connect</a>
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Disconnect Gmail?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will remove your Gmail connection and stop syncing your email data. 
-                      You can reconnect at any time.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      Disconnect
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                </>
+              )}
             </div>
           </div>
         </CardContent>

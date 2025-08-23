@@ -29,7 +29,8 @@ export default function SendersClient() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [loading, setLoading] = useState(true); // Start with loading true
-  const [senders, setSenders] = useState<Sender[]>([]);
+  const [allSenders, setAllSenders] = useState<Sender[]>([]); // All senders from API
+  const [senders, setSenders] = useState<Sender[]>([]); // Filtered senders for display
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [doing, setDoing] = useState<"unsub" | "trash" | "both" | null>(null);
@@ -40,16 +41,45 @@ export default function SendersClient() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/senders/list?q=${encodeURIComponent(q)}&page=${page}&pageSize=${pageSize}`);
+      const res = await fetch(`/api/senders/list?page=${page}&pageSize=${pageSize}`);
       const data = await res.json();
-      setSenders(data.senders ?? []);
+      setAllSenders(data.senders ?? []);
       setTotal(data.total ?? 0);
     } catch {
       toast.error("Failed to load senders");
     } finally {
       setLoading(false);
     }
-  }, [q, page, pageSize]);
+  }, [page, pageSize]);
+
+  // Filter senders locally based on search query and provider
+  useEffect(() => {
+    let filtered = allSenders;
+    
+    // Filter by search query
+    if (q.trim()) {
+      const searchTerm = q.toLowerCase();
+      filtered = filtered.filter(s => 
+        s.from?.toLowerCase().includes(searchTerm) || 
+        s.fromEmail.toLowerCase().includes(searchTerm)
+      );
+    }
+    
+    // Filter by provider (if needed in the future)
+    if (provider !== "all") {
+      // Add provider filtering logic here when needed
+    }
+    
+    setSenders(filtered);
+    setPage(1); // Reset to first page when filtering
+  }, [allSenders, q, provider]);
+
+  // Get paginated senders for display
+  const paginatedSenders = useMemo(() => {
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return senders.slice(startIndex, endIndex);
+  }, [senders, page, pageSize]);
 
   useEffect(() => {
     load();
@@ -247,38 +277,6 @@ export default function SendersClient() {
     setSelected(prev => ({ ...prev, [fromEmail]: checked }));
   };
 
-  // Loading skeleton
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="text-lg font-medium">Loading senders...</p>
-          <p className="text-sm text-muted-foreground">This may take a few moments</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Empty state
-  if (!loading && senders.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>No senders found</CardTitle>
-          <CardDescription>
-            Connect your Gmail account to start managing your email subscriptions.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild>
-            <a href="/api/gmail/start">Connect Gmail</a>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Toolbar */}
@@ -288,7 +286,7 @@ export default function SendersClient() {
           <Input
             placeholder="Search senders..."
             value={q}
-            onChange={(e) => { setPage(1); setQ(e.target.value); }}
+            onChange={(e) => setQ(e.target.value)}
             className="w-64"
           />
         </div>
@@ -370,95 +368,119 @@ export default function SendersClient() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">
-                  <input 
-                    type="checkbox" 
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    checked={senders.length > 0 && senders.every(s => selected[s.fromEmail])}
-                    className="rounded border-gray-300"
-                  />
-                </TableHead>
-                <TableHead>Sender</TableHead>
-                <TableHead>Count</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {senders.map((s) => (
-                <TableRow key={s.fromEmail}>
-                  <TableCell>
+          {loading ? (
+            // Loading state for table only
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center space-y-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+                <p className="text-lg font-medium">Loading senders...</p>
+                <p className="text-sm text-muted-foreground">This may take a few moments</p>
+              </div>
+            </div>
+          ) : senders.length === 0 ? (
+            // Empty state
+            <div className="text-center py-12">
+              <p className="text-lg font-medium">No senders found</p>
+              <p className="text-sm text-muted-foreground mb-4">
+                No email senders found in your inbox. Try refreshing or check back later.
+              </p>
+              <Button variant="outline" onClick={load} disabled={loading}>
+                Refresh
+              </Button>
+            </div>
+          ) : (
+            // Table content
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">
                     <input 
                       type="checkbox" 
-                      checked={!!selected[s.fromEmail]} 
-                      onChange={(e) => handleSelect(s.fromEmail, e.target.checked)}
-                      disabled={!s.listUnsub && doing !== "trash"}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      checked={senders.length > 0 && senders.every(s => selected[s.fromEmail])}
                       className="rounded border-gray-300"
                     />
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{s.from || s.fromEmail}</div>
-                    <div className="text-sm text-muted-foreground">{s.fromEmail}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{s.count}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {s.hasHttp ? (
-                      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-                        <ExternalLink className="mr-1 h-3 w-3" />
-                        HTTP
-                      </Badge>
-                    ) : s.hasMailto ? (
-                      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
-                        <Mail className="mr-1 h-3 w-3" />
-                        Mailto
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline">—</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {s.listUnsub && (
-                          <DropdownMenuItem onClick={() => handleIndividualAction(s, "unsubscribe")}>
-                            <Mail className="mr-2 h-4 w-4" />
-                            Unsubscribe
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem onClick={() => handleIndividualAction(s, "delete")}>
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                        {s.listUnsub && (
-                          <DropdownMenuItem onClick={() => handleIndividualAction(s, "both")}>
-                            <Check className="mr-2 h-4 w-4" />
-                            Both
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+                  </TableHead>
+                  <TableHead>Sender</TableHead>
+                  <TableHead>Count</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {paginatedSenders.map((s) => (
+                  <TableRow key={s.fromEmail}>
+                    <TableCell>
+                      <input 
+                        type="checkbox" 
+                        checked={!!selected[s.fromEmail]} 
+                        onChange={(e) => handleSelect(s.fromEmail, e.target.checked)}
+                        disabled={!s.listUnsub && doing !== "trash"}
+                        className="rounded border-gray-300"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-medium">{s.from || s.fromEmail}</div>
+                      <div className="text-sm text-muted-foreground">{s.fromEmail}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{s.count}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {s.hasHttp ? (
+                        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                          <ExternalLink className="mr-1 h-3 w-3" />
+                          HTTP
+                        </Badge>
+                      ) : s.hasMailto ? (
+                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                          <Mail className="mr-1 h-3 w-3" />
+                          Mailto
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">—</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {s.listUnsub && (
+                            <DropdownMenuItem onClick={() => handleIndividualAction(s, "unsubscribe")}>
+                              <Mail className="mr-2 h-4 w-4" />
+                              Unsubscribe
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onClick={() => handleIndividualAction(s, "delete")}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                          {s.listUnsub && (
+                            <DropdownMenuItem onClick={() => handleIndividualAction(s, "both")}>
+                              <Check className="mr-2 h-4 w-4" />
+                              Both
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, total)} of {total} results
+          Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, senders.length)} of {senders.length} results
+          {q.trim() && ` (filtered from ${total} total)`}
         </div>
         <div className="flex items-center gap-2">
           <Button 
@@ -470,13 +492,13 @@ export default function SendersClient() {
             Previous
           </Button>
           <span className="text-sm">
-            Page {page} of {Math.max(1, Math.ceil(total / pageSize))}
+            Page {page} of {Math.max(1, Math.ceil(senders.length / pageSize))}
           </span>
           <Button 
             variant="outline" 
             size="sm"
             onClick={() => setPage(p => p + 1)} 
-            disabled={page >= Math.ceil(total / pageSize)}
+            disabled={page >= Math.ceil(senders.length / pageSize)}
           >
             Next
           </Button>

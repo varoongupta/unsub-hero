@@ -1,3 +1,4 @@
+// src/middleware.ts
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isPublicRoute = createRouteMatcher([
@@ -9,12 +10,9 @@ const isPublicRoute = createRouteMatcher([
   "/api/gmail/callback",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+export default clerkMiddleware((auth, req) => {
   if (isPublicRoute(req)) return;
-  const session = await auth();
-  if (!session.userId) {
-    return Response.redirect(new URL("/sign-in", process.env.APP_URL || "http://localhost:3000"));
-  }
+  auth();
 });
 
 export const config = {
@@ -23,5 +21,3 @@ export const config = {
     "/(api|trpc)(.*)",
   ],
 };
-
-

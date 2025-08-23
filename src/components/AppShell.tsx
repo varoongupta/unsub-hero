@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +14,27 @@ interface AppShellProps {
 
 export function AppShell({ children, currentTab = "senders" }: AppShellProps) {
   const { signOut } = useClerk();
+  const [isGmailConnected, setIsGmailConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Check Gmail connection status on component mount
+  useEffect(() => {
+    const checkGmailStatus = async () => {
+      try {
+        const response = await fetch("/api/gmail/status");
+        if (response.ok) {
+          const data = await response.json();
+          setIsGmailConnected(data.connected);
+        }
+      } catch (error) {
+        console.error("Error checking Gmail status:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkGmailStatus();
+  }, []);
 
   const handleSignOut = () => {
     signOut();
@@ -50,9 +72,13 @@ export function AppShell({ children, currentTab = "senders" }: AppShellProps) {
               <Button variant="outline" size="sm">
                 Go Pro
               </Button>
-              <Button size="sm" asChild>
-                <Link href="/api/gmail/start">Connect Gmail</Link>
-              </Button>
+              {!isLoading && (
+                <Button size="sm" asChild>
+                  <Link href="/api/gmail/start">
+                    {isGmailConnected ? "Connected" : "Connect Gmail"}
+                  </Link>
+                </Button>
+              )}
               
               {/* User Menu */}
               <DropdownMenu>
